@@ -30,11 +30,11 @@ class LambdaRankHW:
     #different modes are "POINTWISE" "PAIRWISE", "LISTWISE"
     def __init__(self, feature_count, mode = "POINTWISE"):
         self.feature_count = feature_count
+        self.usePointwise = (mode == "POINTWISE")
+        self.usePairwise = (mode == "PAIRWISE")
+        self.useListwise = (mode == "LISTWISE")
         self.output_layer = self.build_model(feature_count, 1, BATCH_SIZE)
         self.iter_funcs = self.create_functions(self.output_layer)
-        self.usePointwise = (mode == "POINTWISE")
-        self.usePairtwise = (mode == "PAIRWISE")
-        self.useListwise = (mode == "LISTWISE")
 
     # train_queries are what load_queries returns - implemented in query.py
     def train_with_queries(self, train_queries, num_epochs):
@@ -107,7 +107,7 @@ class LambdaRankHW:
         if self.usePointwise:
             loss_train = lasagne.objectives.squared_error(output,y_batch)
         # Pairwise loss function
-        if self.usePairtwise:
+        if self.usePairwise:
             loss_train = lambda_loss(output,y_batch)
 
         loss_train = loss_train.mean()
@@ -150,8 +150,8 @@ class LambdaRankHW:
     def lambda_function(self,labels, scores):
         assert len(labels)==len(scores)
         size= len(labels)
-        S_matrix = np.zeros(len(labels), len(labels))  # (line index, column index)
-        lamb_matrix = np.zeros(len(labels), len(labels))  # (line index, column index)
+        S_matrix = np.zeros((len(labels), len(labels)))  # (line index, column index)
+        lamb_matrix = np.zeros((len(labels), len(labels)))  # (line index, column index)
         lambdas = np.zeros(len(labels))
         # compute Suv matrix using labels
         # current ranking       perfect ranking     S matrix :     a     b     c
