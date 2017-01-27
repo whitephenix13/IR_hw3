@@ -20,7 +20,8 @@ MOMENTUM = 0.95
 
 # TODO: Implement the lambda loss function
 def lambda_loss(output, lambdas):
-    raise "Unimplemented"
+    # lambdas = row vector
+    return np.dot(lambdas, output)
 
 
 class LambdaRankHW:
@@ -99,11 +100,11 @@ class LambdaRankHW:
 
         output_row_det = lasagne.layers.get_output(output_layer, X_batch,deterministic=True, dtype="float32")
 
-        # TODO: Change loss function
+        # TODO: Change loss function // DONE
         # Point-wise loss function (squared error) - comment it out
-        loss_train = lasagne.objectives.squared_error(output,y_batch)
+        # loss_train = lasagne.objectives.squared_error(output,y_batch)
         # Pairwise loss function - comment it in
-        # loss_train = lambda_loss(output,y_batch)
+        loss_train = lambda_loss(output,y_batch)
 
         loss_train = loss_train.mean()
 
@@ -175,7 +176,7 @@ class LambdaRankHW:
             batch_train_losses = []
             random_batch = np.arange(len(queries))
             np.random.shuffle(random_batch)
-            for index in xrange(len(queries)):
+            for index in range(len(queries)):
                 random_index = random_batch[index]
                 labels = queries[random_index].get_labels()
 
@@ -190,3 +191,4 @@ class LambdaRankHW:
                 'train_loss': avg_train_loss,
             }
 
+lambda_rank = LambdaRankHW(10)
