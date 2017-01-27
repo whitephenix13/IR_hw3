@@ -18,9 +18,10 @@ NUM_HIDDEN_UNITS = 100
 LEARNING_RATE = 0.00005
 MOMENTUM = 0.95
 
-# TODO: Implement the lambda loss function
+# TODO: Implement the lambda loss function // DONE
 def lambda_loss(output, lambdas):
-    raise "Unimplemented"
+    #assume lambda is a row vector
+    return np.dot(lambdas,output)
 
 
 class LambdaRankHW:
@@ -99,11 +100,11 @@ class LambdaRankHW:
 
         output_row_det = lasagne.layers.get_output(output_layer, X_batch,deterministic=True, dtype="float32")
 
-        # TODO: Change loss function
+        # TODO: Change loss function // DONE
         # Point-wise loss function (squared error) - comment it out
-        loss_train = lasagne.objectives.squared_error(output,y_batch)
+        #loss_train = lasagne.objectives.squared_error(output,y_batch)
         # Pairwise loss function - comment it in
-        # loss_train = lambda_loss(output,y_batch)
+        loss_train = lambda_loss(output,y_batch)
 
         loss_train = loss_train.mean()
 
@@ -144,6 +145,10 @@ class LambdaRankHW:
 
     # TODO: Implement the aggregate (i.e. per document) lambda function
     def lambda_function(self,labels, scores):
+        #compute Suv matrix using labels
+        #compute lamb u v thanks to the scores
+        #aggregate: calculate lambda u with the sum of lambda u v
+        #return lambas (aggregate)
         pass
 
 
@@ -175,7 +180,7 @@ class LambdaRankHW:
             batch_train_losses = []
             random_batch = np.arange(len(queries))
             np.random.shuffle(random_batch)
-            for index in xrange(len(queries)):
+            for index in range(len(queries)):
                 random_index = random_batch[index]
                 labels = queries[random_index].get_labels()
 
