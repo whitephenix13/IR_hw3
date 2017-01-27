@@ -9,7 +9,7 @@ import theano
 import theano.tensor as T
 import time
 from itertools import count
-import query
+import query as q
 
 NUM_EPOCHS = 500
 
@@ -102,14 +102,12 @@ class LambdaRankHW:
         output = output_row.T
 
         output_row_det = lasagne.layers.get_output(output_layer, X_batch,deterministic=True, dtype="float32")
-
         # Point-wise loss function (squared error)
         if self.usePointwise:
             loss_train = lasagne.objectives.squared_error(output,y_batch)
         # Pairwise loss function
         if self.usePairwise:
             loss_train = lambda_loss(output,y_batch)
-
         loss_train = loss_train.mean()
 
         # TODO: (Optionally) You can add regularization if you want - for those interested
@@ -150,9 +148,9 @@ class LambdaRankHW:
     def lambda_function(self,labels, scores):
         assert len(labels)==len(scores)
         size= len(labels)
-        S_matrix = np.zeros((len(labels), len(labels)))  # (line index, column index)
-        lamb_matrix = np.zeros((len(labels), len(labels)))  # (line index, column index)
-        lambdas = np.zeros(len(labels))
+        S_matrix = np.zeros((len(labels), len(labels)), dtype=np.float32)  # (line index, column index)
+        lamb_matrix = np.zeros((len(labels), len(labels)), dtype=np.float32)  # (line index, column index)
+        lambdas = np.zeros(len(labels), dtype=np.float32)
         # compute Suv matrix using labels
         # current ranking       perfect ranking     S matrix :     a     b     c
         # a (label: 0)          b (label: 1)               a       0     -1    0
@@ -182,12 +180,14 @@ class LambdaRankHW:
         return result
 
     def train_once(self, X_train, query, labels):
-
         if self.usePairwise:
             lambdas = self.compute_lambdas_theano(query,labels)
             lambdas.resize((BATCH_SIZE, ))
 
-        X_train.resize((BATCH_SIZE, self.feature_count),refcheck=False)
+        resize_value= BATCH_SIZE
+        if self.usePointwise:
+            resize_value=min(resize_value,len(labels))
+        X_train.resize((resize_value, self.feature_count),refcheck=False)
 
         if self.usePairwise:
             batch_train_loss = self.iter_funcs['train'](X_train, lambdas)
@@ -199,19 +199,27 @@ class LambdaRankHW:
     def train(self, train_queries):
         X_trains = train_queries.get_feature_vectors()
 
-        queries = train_queries.values()
+        #change for python 3
+        queries = list(train_queries.values())
 
         for epoch in itertools.count(1):
             batch_train_losses = []
             random_batch = np.arange(len(queries))
             np.random.shuffle(random_batch)
             for index in range(len(queries)):
+                s_time=time.time()
                 random_index = random_batch[index]
                 labels = queries[random_index].get_labels()
 
+                print("hello1")
                 batch_train_loss = self.train_once(X_trains[random_index],queries[random_index],labels)
+                print("hello2")
                 batch_train_losses.append(batch_train_loss)
-
+                print("hello3")
+                yield {
+                    'index': index,
+                    'time': (time.time()-s_time),
+                }
 
             avg_train_loss = np.mean(batch_train_losses)
 
@@ -220,3 +228,16 @@ class LambdaRankHW:
                 'train_loss': avg_train_loss,
             }
 
+# test
+epochs_model = {"POINTWISE":[3,5,7,9],"PAIRWISE":[3,5,7,9],"LISTWISE":[3,5,7,9]}
+best_epochs_model = {"POINTWISE":0,"PAIRWISE":0,"LISTWISE":0}
+FOLD_NUMBER = 5
+#for i in range(1,FOLD_NUMBER+1):
+#    query_train = q.load_queries('./HP2003/Fold' + str(i) + '/train.txt')
+#    query_valid = q.load_queries('./HP2003/Fold' + str(i) + '/vali.txt')
+#    query_test =  q.load_queries('./HP2003/Fold' + str(i) + '/test.txt')
+
+query_train = q.load_queries('./HP2003/Fold' + str(1) + '/train.txt', 64)
+print(len(query_train))
+lambda_rank = LambdaRankHW(64,mode="PAIRWISE")
+lambda_rank.train_with_queries(query_train,1)
