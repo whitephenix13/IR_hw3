@@ -18,19 +18,22 @@ NUM_HIDDEN_UNITS = 100
 LEARNING_RATE = 0.00005
 MOMENTUM = 0.95
 
-# TODO: Implement the lambda loss function // DONE
 def lambda_loss(output, lambdas):
-    #assume lambda is a row vector
-    return np.dot(lambdas,output)
+    # assume lambda is a row vector
+    return np.dot(lambdas, output)
 
 
 class LambdaRankHW:
 
     NUM_INSTANCES = count()
 
-    def __init__(self, feature_count):
+    #different modes are "POINTWISE" "PAIRWISE", "LISTWISE"
+    def __init__(self, feature_count, mode = "POINTWISE"):
         self.feature_count = feature_count
-        self.output_layer = self.build_model(feature_count,1,BATCH_SIZE)
+        self.usePointwise = (mode == "POINTWISE")
+        self.usePairwise = (mode == "PAIRWISE")
+        self.useListwise = (mode == "LISTWISE")
+        self.output_layer = self.build_model(feature_count, 1, BATCH_SIZE)
         self.iter_funcs = self.create_functions(self.output_layer)
 
     # train_queries are what load_queries returns - implemented in query.py
@@ -99,13 +102,12 @@ class LambdaRankHW:
         output = output_row.T
 
         output_row_det = lasagne.layers.get_output(output_layer, X_batch,deterministic=True, dtype="float32")
-
-        # TODO: Change loss function // DONE
-        # Point-wise loss function (squared error) - comment it out
-        # loss_train = lasagne.objectives.squared_error(output,y_batch)
-        # Pairwise loss function - comment it in
-        loss_train = lambda_loss(output,y_batch)
-
+        # Point-wise loss function (squared error)
+        if self.usePointwise:
+            loss_train = lasagne.objectives.squared_error(output,y_batch)
+        # Pairwise loss function
+        if self.usePairwise:
+            loss_train = lambda_loss(output,y_batch)
         loss_train = loss_train.mean()
 
         # TODO: (Optionally) You can add regularization if you want - for those interested
@@ -143,19 +145,18 @@ class LambdaRankHW:
             out=score_func,
         )
 
-    # TODO: Implement the aggregate (i.e. per document) lambda function
     def lambda_function(self,labels, scores):
         assert len(labels)==len(scores)
         size= len(labels)
-        S_matrix = np.zeros((len(labels), len(labels)))  # (line index, column index)
-        lamb_matrix = np.zeros((len(labels), len(labels)))  # (line index, column index)
-        lambdas = np.zeros(len(labels))
+        S_matrix = np.zeros((len(labels), len(labels)), dtype=np.float32)  # (line index, column index)
+        lamb_matrix = np.zeros((len(labels), len(labels)), dtype=np.float32)  # (line index, column index)
+        lambdas = np.zeros(len(labels), dtype=np.float32)
         # compute Suv matrix using labels
         # current ranking       perfect ranking     S matrix :     a     b     c
         # a (label: 0)          b (label: 1)               a       0     -1    0
         # b (label: 1)          a (label: 0)               b       1     0     0
         # c (label: 0)          c (label: 0)               c       0     0     0
-        # Since the matrix is anti-symmetric, we only have to compute half of it. here we computed the top right half
+        # Since the matrix is anti-symmetric, we only have to loop over half of it.
         for u in range(size):
             for v in range(u, size):
                 if labels[v]>labels[u]:
@@ -164,9 +165,9 @@ class LambdaRankHW:
         # compute lamb u v thanks to the scores
         for u in range(size):
             for v in range(size):
-                lamb_matrix = 1.0/2.0*(1-S_matrix[u][v]) - 1.0 / (1 + np.exp(scores[u] - scores[v]))
+                lamb_matrix[u][v] = 1.0/2.0*(1-S_matrix[u][v]) - 1.0 / (1 + np.exp(scores[u] - scores[v]))
         # aggregate: calculate lambda u with the sum of lambda u v
-        for v in range(u, size):
+        for v in range(size):
             for u in range(v+1, size):
                 lambdas[u] += lamb_matrix[u][v] - lamb_matrix[v][u]
         # return lambas (aggregated)
@@ -179,16 +180,16 @@ class LambdaRankHW:
         return result
 
     def train_once(self, X_train, query, labels):
-
-        # TODO: Comment out to obtain the lambdas
-        lambdas = self.compute_lambdas_theano(query,labels)
-        lambdas.resize((BATCH_SIZE, ))
+        if self.usePairwise:
+            lambdas = self.compute_lambdas_theano(query,labels)
+            lambdas.resize((BATCH_SIZE, ))
 
         X_train.resize((BATCH_SIZE, self.feature_count),refcheck=False)
 
-        # TODO: Comment out (and comment in) to replace labels by lambdas
-        batch_train_loss = self.iter_funcs['train'](X_train, lambdas)
-        # batch_train_loss = self.iter_funcs['train'](X_train, labels)
+        if self.usePairwise:
+            batch_train_loss = self.iter_funcs['train'](X_train, lambdas)
+        if self.usePointwise:
+            batch_train_loss = self.iter_funcs['train'](X_train, labels)
         return batch_train_loss
 
 
@@ -205,8 +206,11 @@ class LambdaRankHW:
                 random_index = random_batch[index]
                 labels = queries[random_index].get_labels()
 
+                print("hello1")
                 batch_train_loss = self.train_once(X_trains[random_index],queries[random_index],labels)
+                print("hello2")
                 batch_train_losses.append(batch_train_loss)
+                print("hello3")
 
 
             avg_train_loss = np.mean(batch_train_losses)
@@ -226,5 +230,5 @@ FOLD_NUMBER = 5
 #    query_test =  q.load_queries('./HP2003/Fold' + str(i) + '/test.txt')
 
 query_train = q.load_queries('./HP2003/Fold' + str(1) + '/train.txt', 64)
-lambda_rank = LambdaRankHW(64)
+lambda_rank = LambdaRankHW(64,mode="PAIRWISE")
 lambda_rank.train_with_queries(query_train,1)
