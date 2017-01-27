@@ -18,10 +18,10 @@ NUM_HIDDEN_UNITS = 100
 LEARNING_RATE = 0.00005
 MOMENTUM = 0.95
 
-# TODO: Implement the lambda loss function
+# TODO: Implement the lambda loss function // DONE
 def lambda_loss(output, lambdas):
-    # lambdas = row vector
-    return np.dot(lambdas, output)
+    #assume lambda is a row vector
+    return np.dot(lambdas,output)
 
 
 class LambdaRankHW:
@@ -145,6 +145,10 @@ class LambdaRankHW:
 
     # TODO: Implement the aggregate (i.e. per document) lambda function
     def lambda_function(self,labels, scores):
+        # compute Suv matrix using labels, the u and v is the index of labels
+        # compute lamb u v thanks to the scores
+        # aggregate: calculate lambda u with the sum of lambda u v
+        # return lambas (aggregate)
         pass
 
 
@@ -191,4 +195,4 @@ class LambdaRankHW:
                 'train_loss': avg_train_loss,
             }
 
-lambda_rank = LambdaRankHW(10)
+lambda_rank = LambdaRankHW(64)
