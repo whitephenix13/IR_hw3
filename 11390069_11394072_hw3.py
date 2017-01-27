@@ -145,11 +145,32 @@ class LambdaRankHW:
 
     # TODO: Implement the aggregate (i.e. per document) lambda function
     def lambda_function(self,labels, scores):
-        #compute Suv matrix using labels
-        #compute lamb u v thanks to the scores
-        #aggregate: calculate lambda u with the sum of lambda u v
-        #return lambas (aggregate)
-        pass
+        assert len(labels)==len(scores)
+        size= len(labels)
+        S_matrix = np.zeros(len(labels), len(labels))  # (line index, column index)
+        lamb_matrix = np.zeros(len(labels), len(labels))  # (line index, column index)
+        lambdas = np.zeros(len(labels))
+        # compute Suv matrix using labels
+        # current ranking       perfect ranking     S matrix :     a     b     c
+        # a (label: 0)          b (label: 1)               a       0     -1    0
+        # b (label: 1)          a (label: 0)               b       1     0     0
+        # c (label: 0)          c (label: 0)               c       0     0     0
+        # Since the matrix is anti-symmetric, we only have to compute half of it. here we computed the top right half
+        for u in range(size):
+            for v in range(u, size):
+                if labels[v]>labels[u]:
+                    S_matrix[u][v] = -1  # since u<v
+                    S_matrix[v][u] = 1  # by anti-symmetry
+        # compute lamb u v thanks to the scores
+        for u in range(size):
+            for v in range(size):
+                lamb_matrix = 1.0/2.0*(1-S_matrix[u][v]) - 1.0 / (1 + np.exp(scores[u] - scores[v]))
+        # aggregate: calculate lambda u with the sum of lambda u v
+        for v in range(u, size):
+            for u in range(v+1, size):
+                lambdas[u] += lamb_matrix[u][v] - lamb_matrix[v][u]
+        # return lambas (aggregated)
+        return lambdas
 
 
     def compute_lambdas_theano(self,query, labels):
