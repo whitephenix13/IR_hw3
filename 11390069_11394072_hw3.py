@@ -9,7 +9,7 @@ import theano
 import theano.tensor as T
 import time
 from itertools import count
-import query
+import query as q
 
 NUM_EPOCHS = 500
 
@@ -145,11 +145,32 @@ class LambdaRankHW:
 
     # TODO: Implement the aggregate (i.e. per document) lambda function
     def lambda_function(self,labels, scores):
-        # compute Suv matrix using labels, the u and v is the index of labels
+        assert len(labels)==len(scores)
+        size= len(labels)
+        S_matrix = np.zeros((len(labels), len(labels)))  # (line index, column index)
+        lamb_matrix = np.zeros((len(labels), len(labels)))  # (line index, column index)
+        lambdas = np.zeros(len(labels))
+        # compute Suv matrix using labels
+        # current ranking       perfect ranking     S matrix :     a     b     c
+        # a (label: 0)          b (label: 1)               a       0     -1    0
+        # b (label: 1)          a (label: 0)               b       1     0     0
+        # c (label: 0)          c (label: 0)               c       0     0     0
+        # Since the matrix is anti-symmetric, we only have to compute half of it. here we computed the top right half
+        for u in range(size):
+            for v in range(u, size):
+                if labels[v]>labels[u]:
+                    S_matrix[u][v] = -1  # since u<v
+                    S_matrix[v][u] = 1  # by anti-symmetry
         # compute lamb u v thanks to the scores
+        for u in range(size):
+            for v in range(size):
+                lamb_matrix = 1.0/2.0*(1-S_matrix[u][v]) - 1.0 / (1 + np.exp(scores[u] - scores[v]))
         # aggregate: calculate lambda u with the sum of lambda u v
-        # return lambas (aggregate)
-        pass
+        for v in range(u, size):
+            for u in range(v+1, size):
+                lambdas[u] += lamb_matrix[u][v] - lamb_matrix[v][u]
+        # return lambas (aggregated)
+        return lambdas
 
 
     def compute_lambdas_theano(self,query, labels):
@@ -160,14 +181,14 @@ class LambdaRankHW:
     def train_once(self, X_train, query, labels):
 
         # TODO: Comment out to obtain the lambdas
-        # lambdas = self.compute_lambdas_theano(query,labels)
-        # lambdas.resize((BATCH_SIZE, ))
+        lambdas = self.compute_lambdas_theano(query,labels)
+        lambdas.resize((BATCH_SIZE, ))
 
         X_train.resize((BATCH_SIZE, self.feature_count),refcheck=False)
 
         # TODO: Comment out (and comment in) to replace labels by lambdas
-        #batch_train_loss = self.iter_funcs['train'](X_train, lambdas)
-        batch_train_loss = self.iter_funcs['train'](X_train, labels)
+        batch_train_loss = self.iter_funcs['train'](X_train, lambdas)
+        # batch_train_loss = self.iter_funcs['train'](X_train, labels)
         return batch_train_loss
 
 
@@ -195,4 +216,15 @@ class LambdaRankHW:
                 'train_loss': avg_train_loss,
             }
 
+# test
+epochs_model = {"POINTWISE":[3,5,7,9],"PAIRWISE":[3,5,7,9],"LISTWISE":[3,5,7,9]}
+best_epochs_model = {"POINTWISE":0,"PAIRWISE":0,"LISTWISE":0}
+FOLD_NUMBER = 5
+#for i in range(1,FOLD_NUMBER+1):
+#    query_train = q.load_queries('./HP2003/Fold' + str(i) + '/train.txt')
+#    query_valid = q.load_queries('./HP2003/Fold' + str(i) + '/vali.txt')
+#    query_test =  q.load_queries('./HP2003/Fold' + str(i) + '/test.txt')
+
+query_train = q.load_queries('./HP2003/Fold' + str(1) + '/train.txt', 64)
 lambda_rank = LambdaRankHW(64)
+lambda_rank.train_with_queries(query_train,1)
