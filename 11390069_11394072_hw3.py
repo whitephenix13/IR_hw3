@@ -230,5 +230,6 @@ FOLD_NUMBER = 5
 #    query_test =  q.load_queries('./HP2003/Fold' + str(i) + '/test.txt')
 
 query_train = q.load_queries('./HP2003/Fold' + str(1) + '/train.txt', 64)
+print(len(query_train))
 lambda_rank = LambdaRankHW(64,mode="PAIRWISE")
 lambda_rank.train_with_queries(query_train,1)
