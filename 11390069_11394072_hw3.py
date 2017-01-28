@@ -10,6 +10,7 @@ import theano.tensor as T
 import time
 from itertools import count
 import query as q
+import pickle
 
 NUM_EPOCHS = 500
 
@@ -241,21 +242,28 @@ def nDCG(test_set, r):
     ordered_set.sort(reverse=True)
     return DCG(test_set, r) / DCG(ordered_set, r)
 
+def dump_file(obj, filename):
+    pickle.dump(obj, open(filename, 'wb'))
+
+def load_file(filename):
+    return pickle.load(open(filename, 'rb'))
+
 epochs_model = {"POINTWISE":[3,5,7,9],"PAIRWISE":[3,5,7,9],"LISTWISE":[3,5,7,9]}
 best_epochs_model = {"POINTWISE":0,"PAIRWISE":0,"LISTWISE":0}
 FOLD_NUMBER = 5
-#for i in range(1,FOLD_NUMBER+1):
-#    query_train = q.load_queries('./HP2003/Fold' + str(i) + '/train.txt')
-#    query_valid = q.load_queries('./HP2003/Fold' + str(i) + '/vali.txt')
-#    query_test =  q.load_queries('./HP2003/Fold' + str(i) + '/test.txt')
+for i in range(1,FOLD_NUMBER+1):
+   query_train = q.load_queries('./HP2003/Fold' + str(i) + '/train.txt', 64)
+   lambda_rank = LambdaRankHW(64, mode="POINTWISE")
+   lambda_rank.train_with_queries(query_train, NUM_EPOCHS)
+   dump_file(lambda_rank, "model/pointwise" + str(i) + ".model")
 
-query_train = q.load_queries('./HP2003/Fold' + str(1) + '/train.txt', 64)
-query_valid = q.load_queries('./HP2003/Fold' + str(1) + '/vali.txt', 64)
-lambda_rank = LambdaRankHW(64,mode="POINTWISE")
-val = query_valid.values()
-labels = query_valid.get_labels()
-result_prev = []
-result = []
-lambda_rank.train_with_queries(query_train, 100)
-for elem, label in zip(val, labels):
-    print(nDCG(lambda_rank.score(elem), 10), label[:10])
+# query_train = q.load_queries('./HP2003/Fold' + str(1) + '/train.txt', 64)
+# query_valid = q.load_queries('./HP2003/Fold' + str(1) + '/vali.txt', 64)
+# lambda_rank = LambdaRankHW(64,mode="POINTWISE")
+# val = query_valid.values()
+# labels = query_valid.get_labels()
+# result_prev = []
+# result = []
+# lambda_rank.train_with_queries(query_train, 100)
+# for elem, label in zip(val, labels):
+#     print(nDCG(lambda_rank.score(elem), 10), label[:10])
