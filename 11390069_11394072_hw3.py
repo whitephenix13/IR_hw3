@@ -240,10 +240,10 @@ FOLD_NUMBER = 5
 
 def train_model(epoch, mode="POINTWISE"):
     for i in range(1,FOLD_NUMBER+1):
-       query_train = q.load_queries('./HP2003/Fold' + str(i) + "_" + str(epoch) +'/train.txt', 64)
+       query_train = q.load_queries('./HP2003/Fold' + str(i) + '/train.txt', 64)
        lambda_rank = LambdaRankHW(64, mode=mode)
        lambda_rank.train_with_queries(query_train, epoch)
-       dump_file(lambda_rank, "model/pointwise" + str(i) + ".model")
+       dump_file(lambda_rank, "model/pointwise" + str(i) + "_" + str(epoch) + ".model")
 
 # validating hyperparameter of model
 epochs = [500]
@@ -280,10 +280,10 @@ def test_model(tuned_model):
             mean_ndcg_test_set.append(met.ndcg_at_k(lambda_rank.score(elem), 10))
         print(np.array(mean_ndcg_test_set).mean())
 
-# train_model(400, "POINTWISE")
+train_model(400, "POINTWISE")
 
-tuned_result = valid_model(epochs)
-tuned_model = who_wins(tuned_result)
-print(tuned_model)
+#tuned_result = valid_model(epochs)
+#tuned_model = who_wins(tuned_result)
+#print(tuned_model)
 
-test_model(tuned_model)
+#test_model(tuned_model)
