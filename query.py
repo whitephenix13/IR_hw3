@@ -30,16 +30,16 @@ class SimpleBufferedLineReader:
     """Read lines from a file, but keep a short buffer to allow rewinds"""
 
     __prev__ = None
-    __next__ = None
+    __nextl_ = None
     __fh__ = None
 
     def __init__(self, fh):
         self.__fh__ = fh
 
     def has_next(self):
-        if self.__next__ == None:  # not set
-            self.__next__ = self.__fh__.readline()
-        if len(self.__next__) < 1:  # empty string - EOF
+        if self.__nextl_ == None:  # not set
+            self.__nextl_ = self.__fh__.readline()
+        if len(self.__nextl_) < 1:  # empty string - EOF
             return False
         return True
 
@@ -48,17 +48,17 @@ class SimpleBufferedLineReader:
 
 
     def next(self):
-        if self.__next__ == None:  # not set
-            self.__next__ = self.__fh__.readline()
-        if len(self.__next__) < 1:  # empty string - EOF
+        if self.__nextl_ == None:  # not set
+            self.__nextl_ = self.__fh__.readline()
+        if len(self.__nextl_) < 1:  # empty string - EOF
             raise StopIteration
-        self.__prev__ = self.__next__
-        self.__next__ = None
+        self.__prev__ = self.__nextl_
+        self.__nextl_ = None
         return self.__prev__
-
+    __next__=next
     def rewind(self):
         if self.__prev__:
-            self.__next__ = self.__prev__
+            self.__nextl_ = self.__prev__
             self.__prev__ = None
 
 
@@ -240,6 +240,7 @@ class QueryStream:
         else:
             return Query(prev, instances, targets, comments)
 
+    __next__ = next  # Python 3.X compatibility
     # read all queries from a file at once
     def read_all(self):
         queries = {}
@@ -269,7 +270,7 @@ class Queries:
         self.__num_features__ = num_features
 
     def __iter__(self):
-        return iter(self.__queries__.itervalues())
+        return iter(list(self.__queries__.values()))
 
     def __getitem__(self, index):
         return self.get_query(index)
