@@ -40,11 +40,11 @@ class LambdaRankHW:
     def train_with_queries(self, train_queries, num_epochs):
         try:
             for epoch in self.train(train_queries):
+                now = time.time()
                 if epoch['number'] % 10 == 0:
                     print("Epoch {} of {} took {:.3f}s".format(
                     epoch['number'], num_epochs, time.time() - now))
                     print("training loss:\t\t{:.6f}\n".format(epoch['train_loss']))
-                    now = time.time()
                 if epoch['number'] >= num_epochs:
                     break
         except KeyboardInterrupt:
@@ -58,7 +58,7 @@ class LambdaRankHW:
 
     def build_model(self,input_dim, output_dim,
                     batch_size=BATCH_SIZE):
-        """Create a symbolic representation of a neural network with `intput_dim`
+        """Create a symbolic representation of a neural network with `input_dim`
         input nodes, `output_dim` output nodes and `num_hidden_units` per hidden
         layer.
 
@@ -129,7 +129,7 @@ class LambdaRankHW:
             [X_batch],output_row_det,
         )
 
-        # (2) Training function, updates the parameters, outpust loss
+        # (2) Training function, updates the parameters, output loss
         train_func = theano.function(
             [X_batch,y_batch], loss_train,
             updates=updates,
@@ -184,7 +184,17 @@ class LambdaRankHW:
             lambdas = self.compute_lambdas_theano(query,labels)
             lambdas.resize((BATCH_SIZE, ))
 
-        X_train.resize((BATCH_SIZE, self.feature_count),refcheck=False)
+        # had to take the minimum size because there's a label with size of 197
+        resize_value = BATCH_SIZE
+        if self.usePointwise:
+            resize_value = min(resize_value, len(labels))
+
+        # if self.usePairwise:
+        #     resize_value = min(resize_value, len(lambdas))
+        #     lambdas.resize((resize_value,))
+
+
+        X_train.resize((resize_value, self.feature_count),refcheck=False)
 
         if self.usePairwise:
             batch_train_loss = self.iter_funcs['train'](X_train, lambdas)
@@ -203,16 +213,12 @@ class LambdaRankHW:
             random_batch = np.arange(len(queries))
             np.random.shuffle(random_batch)
             for index in range(len(queries)):
+                #s_time = time.time()
                 random_index = random_batch[index]
                 labels = queries[random_index].get_labels()
-
-                print("hello1")
                 batch_train_loss = self.train_once(X_trains[random_index],queries[random_index],labels)
-                print("hello2")
                 batch_train_losses.append(batch_train_loss)
-                print("hello3")
-
-
+                #print(index, time.time()-s_time)
             avg_train_loss = np.mean(batch_train_losses)
 
             yield {
@@ -221,6 +227,20 @@ class LambdaRankHW:
             }
 
 # test
+def DCG(test_set, r):
+    assert r <= len(test_set)
+    assert r!= 0
+    res=0
+    for k in range(1,r+1):#r is the rank so it starts at 1
+        rel_r = test_set[k-1]#index of element = rank -1 since rank starts at 1 and index at 0
+        res+=float(np.power(2,rel_r)-1)/(np.log2(1+k))
+    return res
+
+def nDCG(test_set, r):
+    ordered_set= list(test_set)
+    ordered_set.sort(reverse=True)
+    return DCG(test_set, r) / DCG(ordered_set, r)
+
 epochs_model = {"POINTWISE":[3,5,7,9],"PAIRWISE":[3,5,7,9],"LISTWISE":[3,5,7,9]}
 best_epochs_model = {"POINTWISE":0,"PAIRWISE":0,"LISTWISE":0}
 FOLD_NUMBER = 5
@@ -230,6 +250,12 @@ FOLD_NUMBER = 5
 #    query_test =  q.load_queries('./HP2003/Fold' + str(i) + '/test.txt')
 
 query_train = q.load_queries('./HP2003/Fold' + str(1) + '/train.txt', 64)
-print(len(query_train))
-lambda_rank = LambdaRankHW(64,mode="PAIRWISE")
-lambda_rank.train_with_queries(query_train,1)
+query_valid = q.load_queries('./HP2003/Fold' + str(1) + '/vali.txt', 64)
+lambda_rank = LambdaRankHW(64,mode="POINTWISE")
+val = query_valid.values()
+labels = query_valid.get_labels()
+result_prev = []
+result = []
+lambda_rank.train_with_queries(query_train, 100)
+for elem, label in zip(val, labels):
+    print(nDCG(lambda_rank.score(elem), 10), label[:10])
