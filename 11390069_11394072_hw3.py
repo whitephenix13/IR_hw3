@@ -10,6 +10,8 @@ import theano.tensor as T
 import time
 from itertools import count
 import query as q
+# taken from here https://gist.githubusercontent.com/bwhite/3726239/raw/2c92e90259b01b4a657d20c0ad8390caadd59c8b/rank_metrics.py
+import metrics as met
 import pickle
 
 NUM_EPOCHS = 500
@@ -227,43 +229,61 @@ class LambdaRankHW:
                 'train_loss': avg_train_loss,
             }
 
-# test
-def DCG(test_set, r):
-    assert r <= len(test_set)
-    assert r!= 0
-    res=0
-    for k in range(1,r+1):#r is the rank so it starts at 1
-        rel_r = test_set[k-1]#index of element = rank -1 since rank starts at 1 and index at 0
-        res+=float(np.power(2,rel_r)-1)/(np.log2(1+k))
-    return res
-
-def nDCG(test_set, r):
-    ordered_set= list(test_set)
-    ordered_set.sort(reverse=True)
-    return DCG(test_set, r) / DCG(ordered_set, r)
-
+# train and dump model
 def dump_file(obj, filename):
     pickle.dump(obj, open(filename, 'wb'))
 
 def load_file(filename):
     return pickle.load(open(filename, 'rb'))
 
-epochs_model = {"POINTWISE":[3,5,7,9],"PAIRWISE":[3,5,7,9],"LISTWISE":[3,5,7,9]}
-best_epochs_model = {"POINTWISE":0,"PAIRWISE":0,"LISTWISE":0}
 FOLD_NUMBER = 5
-for i in range(1,FOLD_NUMBER+1):
-   query_train = q.load_queries('./HP2003/Fold' + str(i) + '/train.txt', 64)
-   lambda_rank = LambdaRankHW(64, mode="POINTWISE")
-   lambda_rank.train_with_queries(query_train, NUM_EPOCHS)
-   dump_file(lambda_rank, "model/pointwise" + str(i) + ".model")
 
-# query_train = q.load_queries('./HP2003/Fold' + str(1) + '/train.txt', 64)
-# query_valid = q.load_queries('./HP2003/Fold' + str(1) + '/vali.txt', 64)
-# lambda_rank = LambdaRankHW(64,mode="POINTWISE")
-# val = query_valid.values()
-# labels = query_valid.get_labels()
-# result_prev = []
-# result = []
-# lambda_rank.train_with_queries(query_train, 100)
-# for elem, label in zip(val, labels):
-#     print(nDCG(lambda_rank.score(elem), 10), label[:10])
+def train_model(epoch, mode="POINTWISE"):
+    for i in range(1,FOLD_NUMBER+1):
+       query_train = q.load_queries('./HP2003/Fold' + str(i) + "_" + str(epoch) +'/train.txt', 64)
+       lambda_rank = LambdaRankHW(64, mode=mode)
+       lambda_rank.train_with_queries(query_train, epoch)
+       dump_file(lambda_rank, "model/pointwise" + str(i) + ".model")
+
+# validating hyperparameter of model
+epochs = [500]
+
+def valid_model(epochs):
+    tuned_result = {}
+    for i in range(1, FOLD_NUMBER + 1):
+        tuned_result[i] = []
+        query_valid = q.load_queries('./HP2003/Fold' + str(i) + '/vali.txt', 64)
+        val = query_valid.values()
+        for epoch in epochs:
+            mean_ndcg_valid_set = []
+            lambda_rank = load_file("model/pointwise" + str(i) + "_" + str(epoch) + ".model")
+            for elem in val:
+                mean_ndcg_valid_set.append(met.ndcg_at_k(lambda_rank.score(elem), 10))
+            tuned_result[i].append(np.array(mean_ndcg_valid_set).mean())
+    return tuned_result
+
+def who_wins(tuned_result):
+    tuned_model = []
+    for i, key in enumerate(tuned_result):
+        epoch_win = str(epochs[np.argmax(np.array(tuned_result[key]))])
+        print(epoch_win + " is the best epoch for Fold " + str(i+1))
+        tuned_model.append(str(i+1) + "_" + epoch_win)
+    return tuned_model
+
+def test_model(tuned_model):
+    for i in range(1, FOLD_NUMBER + 1):
+        query_test = q.load_queries('./HP2003/Fold' + str(i) + '/test.txt', 64)
+        val = query_test.values()
+        lambda_rank = load_file("model/pointwise" + tuned_model[i-1] + ".model")
+        mean_ndcg_test_set = []
+        for elem in val:
+            mean_ndcg_test_set.append(met.ndcg_at_k(lambda_rank.score(elem), 10))
+        print(np.array(mean_ndcg_test_set).mean())
+
+# train_model(400, "POINTWISE")
+
+tuned_result = valid_model(epochs)
+tuned_model = who_wins(tuned_result)
+print(tuned_model)
+
+test_model(tuned_model)
