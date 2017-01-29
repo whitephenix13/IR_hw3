@@ -246,7 +246,7 @@ def train_model(epoch, mode="POINTWISE"):
        dump_file(lambda_rank, "model/pointwise" + str(i) + "_" + str(epoch) + ".model")
 
 # validating hyperparameter of model
-epochs = [500]
+epochs = [300,400,500,600]
 
 def valid_model(epochs):
     tuned_result = {}
@@ -280,10 +280,13 @@ def test_model(tuned_model):
             mean_ndcg_test_set.append(met.ndcg_at_k(lambda_rank.score(elem), 10))
         print(np.array(mean_ndcg_test_set).mean())
 
-train_model(400, "POINTWISE")
+#train_model(600, "POINTWISE")
 
 #tuned_result = valid_model(epochs)
 #tuned_model = who_wins(tuned_result)
 #print(tuned_model)
 
-#test_model(tuned_model)
+# best model according to hyperparameter tuning
+tuned_model = ["1_600", "2_400", "3_400", "4_400", "5_300"]
+
+test_model(tuned_model)
