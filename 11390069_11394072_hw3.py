@@ -10,6 +10,8 @@ import theano.tensor as T
 import time
 from itertools import count
 import query as q
+# taken from here https://gist.githubusercontent.com/bwhite/3726239/raw/2c92e90259b01b4a657d20c0ad8390caadd59c8b/rank_metrics.py
+import metrics as met
 import pickle
 
 NUM_EPOCHS = 500
@@ -146,7 +148,7 @@ class LambdaRankHW:
             out=score_func,
         )
 
-    def lambda_function(self,labels, scores):
+    def lambda_function(self,labels, scores, useListwise=False):
         assert len(labels)==len(scores)
         size= len(labels)
         S_matrix = np.zeros((len(labels), len(labels)), dtype=np.float32)  # (line index, column index)
@@ -164,9 +166,17 @@ class LambdaRankHW:
                     S_matrix[u][v] = -1  # since u<v
                     S_matrix[v][u] = 1  # by anti-symmetry
         # compute lamb u v thanks to the scores
+        delta_ndcg=1
+        max_len = len(scores)
+        current_ndcg= met.ndcg_at_k(scores, max_len)
         for u in range(size):
             for v in range(size):
                 lamb_matrix[u][v] = 1.0/2.0*(1-S_matrix[u][v]) - 1.0 / (1 + np.exp(scores[u] - scores[v]))
+                if(useListwise):
+                    switch_scores= list(scores)
+                    scores[u],scores[v]= scores[v],scores[u]
+                    switch_ndcg= met.ndcg_at_k(switch_scores, max_len)
+                    lamb_matrix[u][v]*(switch_ndcg-current_ndcg)
         # aggregate: calculate lambda u with the sum of lambda u v
         for v in range(size):
             for u in range(v+1, size):
@@ -175,16 +185,18 @@ class LambdaRankHW:
         return lambdas
 
 
-    def compute_lambdas_theano(self,query, labels):
+    def compute_lambdas_theano(self,query, labels,useListwise=False):
         scores = self.score(query).flatten()
-        result = self.lambda_function(labels, scores[:len(labels)])
+        result = self.lambda_function(labels, scores[:len(labels)],useListwise)
         return result
 
     def train_once(self, X_train, query, labels):
         if self.usePairwise:
             lambdas = self.compute_lambdas_theano(query,labels)
             lambdas.resize((BATCH_SIZE, ))
-
+        if self.useListwise:
+            lambdas = self.compute_lambdas_theano(query, labels,self.useListwise)
+            lambdas.resize((BATCH_SIZE,))
         # had to take the minimum size because there's a label with size of 197
         resize_value = BATCH_SIZE
         if self.usePointwise:
@@ -220,7 +232,7 @@ class LambdaRankHW:
                 labels = queries[random_index].get_labels()
                 batch_train_loss = self.train_once(X_trains[random_index],queries[random_index],labels)
                 batch_train_losses.append(batch_train_loss)
-                print(index, time.time()-s_time)
+                #print(index, time.time()-s_time)
             avg_train_loss = np.mean(batch_train_losses)
 
             yield {
@@ -229,48 +241,79 @@ class LambdaRankHW:
             }
 
 
-# test
-def DCG(test_set, r):
-    assert r <= len(test_set)
-    assert r!= 0
-    res=0
-    for k in range(1,r+1):#r is the rank so it starts at 1
-        rel_r = test_set[k-1]#index of element = rank -1 since rank starts at 1 and index at 0
-        res+=float(np.power(2,rel_r)-1)/(np.log2(1+k))
-    return res
-
-
-def nDCG(test_set, r):
-    ordered_set= list(test_set)
-    ordered_set.sort(reverse=True)
-    return DCG(test_set, r) / DCG(ordered_set, r)
-
-
+# train and dump model
 def dump_file(obj, filename):
     pickle.dump(obj, open(filename, 'wb'))
 
 
 def load_file(filename):
-    return pickle.load(open(filename, 'rb'))
+    return pickle.load(open(filename, 'rb'),encoding='latin1')
 
-epochs_model = {"POINTWISE":[3,5,7,9],"PAIRWISE":[3,5,7,9],"LISTWISE":[3,5,7,9]}
-best_epochs_model = {"POINTWISE":0,"PAIRWISE":0,"LISTWISE":0}
 FOLD_NUMBER = 5
 NUM_FEATURE_VECTOR=64
-num_epoch=1
-for i in range(1,FOLD_NUMBER+1):
-    query_train = q.load_queries('./HP2003/Fold' + str(i) + '/train.txt', NUM_FEATURE_VECTOR)
-    lambda_rank = LambdaRankHW(NUM_FEATURE_VECTOR, mode="PAIRWISE")
-    lambda_rank.train_with_queries(query_train, num_epoch)
-    dump_file(lambda_rank, "model/pairwise" + str(i) + ".model")
 
-# query_train = q.load_queries('./HP2003/Fold' + str(1) + '/train.txt', 64)
-# query_valid = q.load_queries('./HP2003/Fold' + str(1) + '/vali.txt', 64)
-# lambda_rank = LambdaRankHW(64,mode="POINTWISE")
-# val = query_valid.values()
-# labels = query_valid.get_labels()
-# result_prev = []
-# result = []
-# lambda_rank.train_with_queries(query_train, 100)
-# for elem, label in zip(val, labels):
-#     print(nDCG(lambda_rank.score(elem), 10), label[:10])
+def train_model(epoch, mode="POINTWISE",foldNumber=FOLD_NUMBER):
+    for i in range(1,foldNumber+1):
+       query_train = q.load_queries('./HP2003/Fold' + str(i)  +'/train.txt', NUM_FEATURE_VECTOR)
+       lambda_rank = LambdaRankHW(NUM_FEATURE_VECTOR, mode=mode)
+       lambda_rank.train_with_queries(query_train, epoch)
+       dump_file(lambda_rank, "model/"+mode + str(i) + ".model")
+
+# validating hyperparameter of model
+epochs = [500]
+
+def valid_model(epochs):
+    tuned_result = {}
+    for i in range(1, FOLD_NUMBER + 1):
+        tuned_result[i] = []
+        query_valid = q.load_queries('./HP2003/Fold' + str(i) + '/vali.txt', NUM_FEATURE_VECTOR)
+        val = query_valid.values()
+        for epoch in epochs:
+            mean_ndcg_valid_set = []
+            lambda_rank = load_file("model/pointwise" + str(i) + "_" + str(epoch) + ".model")
+            for elem in val:
+                mean_ndcg_valid_set.append(met.ndcg_at_k(lambda_rank.score(elem), 10))
+            tuned_result[i].append(np.array(mean_ndcg_valid_set).mean())
+    return tuned_result
+
+def who_wins(tuned_result):
+    tuned_model = []
+    for i, key in enumerate(tuned_result):
+        epoch_win = str(epochs[np.argmax(np.array(tuned_result[key]))])
+        print(epoch_win + " is the best epoch for Fold " + str(i+1))
+        tuned_model.append(str(i+1) + "_" + epoch_win)
+    return tuned_model
+
+def test_model_tuned(tuned_model):
+    for i in range(1, FOLD_NUMBER + 1):
+        query_test = q.load_queries('./HP2003/Fold' + str(i) + '/test.txt', NUM_FEATURE_VECTOR)
+        val = query_test.values()
+        lambda_rank = load_file("model/pointwise" + tuned_model[i-1] + ".model")
+        mean_ndcg_test_set = []
+        for elem in val:
+            mean_ndcg_test_set.append(met.ndcg_at_k(lambda_rank.score(elem), 10))
+        print(np.array(mean_ndcg_test_set).mean())
+
+def test_model(mode,tuned_value=None):
+    model_name  = mode
+    tuned_name = "" if tuned_value==None else str("_"+tuned_value)
+    if(mode == "POINTWISE"):
+        model_name="pointwise"
+    for i in range(1, FOLD_NUMBER + 1):
+        query_test = q.load_queries('./HP2003/Fold' + str(i) + '/test.txt', 64)
+        val = query_test.values()
+        lambda_rank = load_file("model/"+model_name+ str(i)+tuned_name + ".model")
+        mean_ndcg_test_set = []
+        for elem in val:
+            mean_ndcg_test_set.append(met.ndcg_at_k(lambda_rank.score(elem), 10))
+        print(np.array(mean_ndcg_test_set).mean())
+
+#train_model(10, "PAIRWISE",foldNumber=5)
+
+#tuned_result = valid_model(epochs)
+#tuned_model = who_wins(tuned_result)
+# print(tuned_model)
+#
+#test_model_tuned(tuned_model)
+test_model("PAIRWISE")
+
