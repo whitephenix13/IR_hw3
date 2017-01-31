@@ -274,11 +274,14 @@ def valid_model(epochs):
             ndcg_valid = []
             lambda_rank = load_file("model/pointwise" + str(i) + "_" + str(epoch) + ".model")
             labels = query_valid.get_labels()
+            j = 0
             for elem in val:
-                query_score=lambda_rank.score(elem)
+                query_score = lambda_rank.score(elem)
+                query_labels = np.array(labels[j])
                 sort_index = sorted(range(len(query_score)), key=lambda k: query_score[k])
-                labels = list(labels[sort_index])
-                ndcg_valid.append(met.ndcg_k(labels, 10))
+                query_labels = list(query_labels[sort_index])
+                ndcg_valid.append(met.ndcg_k(query_labels, 10))
+                j += 1
             #sort labels with respect to score
 
             tuned_result[i].append(np.array(ndcg_valid).mean())
@@ -300,11 +303,14 @@ def test_model_tuned(tuned_model):
         lambda_rank = load_file("model/pointwise" + tuned_model[i-1] + ".model")
         labels=query_test.get_labels()
         mean_ndcg_test_set = []
+        j = 0
         for elem in val:
             query_score = lambda_rank.score(elem)
+            query_labels = np.array(labels[j])
             sort_index = sorted(range(len(query_score)), key=lambda k: query_score[k])
-            labels = list(labels[sort_index])
-            mean_ndcg_test_set.append(met.ndcg_k(labels, 10))
+            query_labels = list(query_labels[sort_index])
+            mean_ndcg_test_set.append(met.ndcg_k(query_labels, 10))
+            j += 1
         print(np.array(mean_ndcg_test_set).mean())
 
 def test_model(mode,tuned_value=None):
@@ -319,11 +325,14 @@ def test_model(mode,tuned_value=None):
         lambda_rank = load_file("model/"+model_name+ str(i)+tuned_name + ".model")
         labels=query_test.get_labels()
         mean_ndcg_test_set = []
+        j=0
         for elem in val:
             query_score = lambda_rank.score(elem)
+            query_labels= np.array(labels[j])
             sort_index = sorted(range(len(query_score)), key=lambda k: query_score[k])
-            labels = list(labels[sort_index])
-            mean_ndcg_test_set.append(met.ndcg_k(labels, 10))
+            query_labels = list(query_labels[sort_index])
+            mean_ndcg_test_set.append(met.ndcg_k(query_labels, 10))
+            j+=1
         print(np.array(mean_ndcg_test_set).mean())
 
 #train_model(3, "PAIRWISE",foldNumber=1)
