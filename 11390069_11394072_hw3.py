@@ -327,15 +327,16 @@ def test_model(mode,tuned_value=None):
         mean_ndcg_test_set = []
         j=0
         for elem in val:
-            query_score = lambda_rank.score(elem)
+            #Strange step: if take abs value, it works
+            query_score = np.abs(lambda_rank.score(elem))
             query_labels= np.array(labels[j])
-            sort_index = sorted(range(len(query_score)), key=lambda k: query_score[k])
+            sort_index = sorted(range(len(query_score)), reverse=True,key=lambda k: query_score[k])
             query_labels = list(query_labels[sort_index])
             mean_ndcg_test_set.append(met.ndcg_k(query_labels, 10))
             j+=1
         print(np.array(mean_ndcg_test_set).mean())
 
-#train_model(3, "PAIRWISE",foldNumber=1)
+#train_model(5, "PAIRWISE",foldNumber=5)
 
 #tuned_result = valid_model(epochs)
 #tuned_model = who_wins(tuned_result)
