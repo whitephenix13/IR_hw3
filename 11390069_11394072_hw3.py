@@ -167,15 +167,16 @@ class LambdaRankHW:
                     S_matrix[v][u] = -1  # by anti-symmetry
         # compute lamb u v thanks to the scores
         delta_ndcg=1
-        max_len = len(scores)
-        current_ndcg= met.ndcg_at_k(scores, max_len)
+        max_len = len(labels)
+        #TODO: REZKA CHECK
+        current_ndcg= met.ndcg_k(labels, max_len)
         for u in range(size):
             for v in range(size):
                 lamb_matrix[u][v] = 1.0/2.0*(1-S_matrix[u][v]) - 1.0 / (1 + np.exp(scores[u] - scores[v]))
                 if(useListwise):
-                    switch_scores= list(scores)
-                    scores[u],scores[v]= scores[v],scores[u]
-                    switch_ndcg= met.ndcg_at_k(switch_scores, max_len)
+                    switch_labels= list(labels)
+                    switch_labels[u],switch_labels[v]= switch_labels[v],switch_labels[u]
+                    switch_ndcg= met.ndcg_k(switch_labels, max_len)
                     lamb_matrix[u][v]*(switch_ndcg-current_ndcg)
         # aggregate: calculate lambda u with the sum of lambda u v
         for v in range(size):
@@ -263,17 +264,24 @@ def train_model(epoch, mode="POINTWISE",foldNumber=FOLD_NUMBER):
 epochs = [500]
 
 def valid_model(epochs):
+    #TODO: REZKA CHECK
     tuned_result = {}
     for i in range(1, FOLD_NUMBER + 1):
         tuned_result[i] = []
         query_valid = q.load_queries('./HP2003/Fold' + str(i) + '/vali.txt', NUM_FEATURE_VECTOR)
+        labels=query_valid.get_labels()
         val = query_valid.values()
         for epoch in epochs:
-            mean_ndcg_valid_set = []
+            ndcg_valid = []
             lambda_rank = load_file("model/pointwise" + str(i) + "_" + str(epoch) + ".model")
             for elem in val:
-                mean_ndcg_valid_set.append(met.ndcg_at_k(lambda_rank.score(elem), 10))
-            tuned_result[i].append(np.array(mean_ndcg_valid_set).mean())
+                query_score=lambda_rank.score(elem)
+                sort_index = sorted(range(len(query_score)), key=lambda k: query_score[k])
+                labels = list(labels[sort_index])
+                ndcg_valid.append(met.ndcg_k(labels, 10))
+            #sort labels with respect to score
+
+            tuned_result[i].append(np.array(ndcg_valid).mean())
     return tuned_result
 
 def who_wins(tuned_result):
@@ -285,16 +293,21 @@ def who_wins(tuned_result):
     return tuned_model
 
 def test_model_tuned(tuned_model):
+    #TODO: REZKA CHECK
     for i in range(1, FOLD_NUMBER + 1):
         query_test = q.load_queries('./HP2003/Fold' + str(i) + '/test.txt', NUM_FEATURE_VECTOR)
         val = query_test.values()
         lambda_rank = load_file("model/pointwise" + tuned_model[i-1] + ".model")
         mean_ndcg_test_set = []
         for elem in val:
-            mean_ndcg_test_set.append(met.ndcg_at_k(lambda_rank.score(elem), 10))
+            query_score = lambda_rank.score(elem)
+            sort_index = sorted(range(len(query_score)), key=lambda k: query_score[k])
+            labels = list(labels[sort_index])
+            mean_ndcg_test_set.append(met.ndcg_k(labels, 10))
         print(np.array(mean_ndcg_test_set).mean())
 
 def test_model(mode,tuned_value=None):
+    #TODO:REKA CHECK
     model_name  = mode
     tuned_name = "" if tuned_value==None else str("_"+tuned_value)
     if(mode == "POINTWISE"):
@@ -305,15 +318,18 @@ def test_model(mode,tuned_value=None):
         lambda_rank = load_file("model/"+model_name+ str(i)+tuned_name + ".model")
         mean_ndcg_test_set = []
         for elem in val:
-            mean_ndcg_test_set.append(met.ndcg_at_k(lambda_rank.score(elem), 10))
+            query_score = lambda_rank.score(elem)
+            sort_index = sorted(range(len(query_score)), key=lambda k: query_score[k])
+            labels = list(labels[sort_index])
+            mean_ndcg_test_set.append(met.ndcg_k(labels, 10))
         print(np.array(mean_ndcg_test_set).mean())
 
-#train_model(10, "PAIRWISE",foldNumber=5)
+train_model(3, "PAIRWISE",foldNumber=1)
 
 #tuned_result = valid_model(epochs)
 #tuned_model = who_wins(tuned_result)
 # print(tuned_model)
 #
 #test_model_tuned(tuned_model)
-test_model("PAIRWISE")
+#test_model("PAIRWISE")
 
