@@ -274,6 +274,7 @@ def valid_model(epochs):
         for epoch in epochs:
             ndcg_valid = []
             lambda_rank = load_file("model/pointwise" + str(i) + "_" + str(epoch) + ".model")
+            labels = lambda_rank.get_labels()
             for elem in val:
                 query_score=lambda_rank.score(elem)
                 sort_index = sorted(range(len(query_score)), key=lambda k: query_score[k])
@@ -298,6 +299,7 @@ def test_model_tuned(tuned_model):
         query_test = q.load_queries('./HP2003/Fold' + str(i) + '/test.txt', NUM_FEATURE_VECTOR)
         val = query_test.values()
         lambda_rank = load_file("model/pointwise" + tuned_model[i-1] + ".model")
+        labels=lambda_rank.get_labels()
         mean_ndcg_test_set = []
         for elem in val:
             query_score = lambda_rank.score(elem)
@@ -316,6 +318,7 @@ def test_model(mode,tuned_value=None):
         query_test = q.load_queries('./HP2003/Fold' + str(i) + '/test.txt', 64)
         val = query_test.values()
         lambda_rank = load_file("model/"+model_name+ str(i)+tuned_name + ".model")
+        labels=lambda_rank.get_labels()
         mean_ndcg_test_set = []
         for elem in val:
             query_score = lambda_rank.score(elem)
@@ -324,12 +327,12 @@ def test_model(mode,tuned_value=None):
             mean_ndcg_test_set.append(met.ndcg_k(labels, 10))
         print(np.array(mean_ndcg_test_set).mean())
 
-train_model(3, "PAIRWISE",foldNumber=1)
+#train_model(3, "PAIRWISE",foldNumber=1)
 
 #tuned_result = valid_model(epochs)
 #tuned_model = who_wins(tuned_result)
 # print(tuned_model)
 #
 #test_model_tuned(tuned_model)
-#test_model("PAIRWISE")
+test_model("PAIRWISE")
 
