@@ -156,15 +156,15 @@ class LambdaRankHW:
         lambdas = np.zeros(len(labels), dtype=np.float32)
         # compute Suv matrix using labels
         # current ranking       perfect ranking     S matrix :     a     b     c
-        # a (label: 0)          b (label: 1)               a       0     -1    0
-        # b (label: 1)          a (label: 0)               b       1     0     0
+        # a (label: 0)          b (label: 1)               a       0     1    0
+        # b (label: 1)          a (label: 0)               b       -1     0     0
         # c (label: 0)          c (label: 0)               c       0     0     0
         # Since the matrix is anti-symmetric, we only have to loop over half of it.
         for u in range(size):
             for v in range(u, size):
                 if labels[v]>labels[u]:
-                    S_matrix[u][v] = -1  # since u<v
-                    S_matrix[v][u] = 1  # by anti-symmetry
+                    S_matrix[u][v] = 1  # since doc u > doc v
+                    S_matrix[v][u] = -1  # by anti-symmetry
         # compute lamb u v thanks to the scores
         delta_ndcg=1
         max_len = len(scores)
