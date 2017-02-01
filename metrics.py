@@ -13,9 +13,9 @@ def ndcg_k(rel,k):
         return 0.
     return dcg_k(_rel, k) / dcg_max
 
-def delta_switch_ndcg(rel1,rel2,pos1,pos2):
+def delta_switch_dcg(rel1,rel2,pos1,pos2):
     #calculate the difference induced in ndcg by making the change:
     #(pos1,rel1) => (pos1,rel2)
     #(pos2,rel2) => (pos2,rel1)
     #NOTE THAT rank = pos+1
-    return(float(rel2-rel1)/ np.log2(pos1+2) + float(rel1-rel2)/ np.log2(pos2+2))
+    return (float(rel2-rel1)/ np.log2(pos1+2) + float(rel1-rel2)/ np.log2(pos2+2))

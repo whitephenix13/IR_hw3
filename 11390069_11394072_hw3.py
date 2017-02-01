@@ -25,7 +25,7 @@ def lambda_loss(output, lambdas):
     # assume lambda is a row vector
     return np.dot(lambdas, output)
 
-
+#TEST OF THIS FUNCTION AT THE BOTTOM OF THIS FILE
 def create_S(_labels):
     # compute Suv matrix using labels
     # current ranking       perfect ranking     S matrix :     a     b     c
@@ -49,9 +49,12 @@ def create_S(_labels):
             S[u][u] = 0
     return S
 
+#TEST OF THIS FUNCTION AT THE BOTTOM OF THIS FILE
 def compute_lambda_matrix (_S, _scores,_labels,_useListwise):
     size=len(_scores)
     lamb_matrix = np.zeros((size, size), dtype=np.float32)  # (line index, column index)
+    dcg_max = met.dcg_k(sorted(_labels, reverse=True), len(_labels))
+
     for u in range(size):
         for v in range(u, size):
             lamb_matrix[u][v]=0.5*(1-_S[u][v]) + -1.0/(1+np.exp(_scores[u]-_scores[v]))
@@ -59,9 +62,9 @@ def compute_lambda_matrix (_S, _scores,_labels,_useListwise):
 
             if (_useListwise):
                 if(_S[u][v]!=0):
-                    delta_ndcg= met.delta_switch_ndcg(_labels[u],_labels[v],u,v)
-                    lamb_matrix[u][v] *= delta_ndcg
-                    lamb_matrix[v][u] *= delta_ndcg
+                    delta_dcg= met.delta_switch_dcg(_labels[u],_labels[v],u,v)
+                    lamb_matrix[u][v] *= delta_dcg/dcg_max
+                    lamb_matrix[v][u] *= delta_dcg/dcg_max
     return lamb_matrix
 
 class LambdaRankHW:
@@ -336,7 +339,7 @@ def test_model_tuned(tuned_model):
 def test_model(mode,tuned_value=None):
     #TODO:REKA CHECK
     model_name  = mode
-    tuned_name = "" if tuned_value==None else str("_"+tuned_value)
+    tuned_name = "" if tuned_value==None else "_"+str(tuned_value)
     if(mode == "POINTWISE"):
         model_name="pointwise"
     for i in range(1, FOLD_NUMBER + 1):
@@ -356,17 +359,19 @@ def test_model(mode,tuned_value=None):
             j+=1
         print(np.array(mean_ndcg_test_set).mean())
 
-train_model(5, "LISTWISE",foldNumber=5)
+#train_model(5, "LISTWISE",foldNumber=5)
 
 #tuned_result = valid_model(epochs)
 #tuned_model = who_wins(tuned_result)
 # print(tuned_model)
 #
 #test_model_tuned(tuned_model)
-#test_model("PAIRWISE")
+#test_model("POINTWISE")
 
+#TEST THE IMPLEMENTED FUNCTION
 # test_S=create_S([0,1,1])
 # print(test_S)
 # test_scores=[1,2,3]
+# labels=[1,0,0]
 # print(test_scores)
-# print(compute_lambda_matrix(test_S,test_scores))
+# print(compute_lambda_matrix(test_S,test_scores,labels,_useListwise=False))
